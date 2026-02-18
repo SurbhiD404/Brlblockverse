@@ -147,3 +147,9 @@ REST_FRAMEWORK = {
     },
 }
 # STATIC_ROOT = BASE_DIR / "staticfiles"
+
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+
+SOLO_FEE = int(os.getenv("SOLO_FEE", 50))
+DUO_FEE = int(os.getenv("DUO_FEE", 80))

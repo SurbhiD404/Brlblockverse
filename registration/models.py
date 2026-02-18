@@ -49,3 +49,16 @@ class Player(models.Model):
     def __str__(self):
         return self.name
 
+class Payment(models.Model):
+    razorpay_order_id = models.CharField(max_length=100, unique=True)
+    razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True)
+    razorpay_signature = models.CharField(max_length=255, null=True, blank=True)
+
+    amount = models.IntegerField()
+    team_type = models.CharField(max_length=10)
+
+    verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.razorpay_order_id

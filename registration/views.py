@@ -3,10 +3,108 @@ from django.db import transaction, IntegrityError
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.conf import settings
 from .serializers import TeamSerializer
 from .utils import send_registration_mail
-from .models import Team, Player
-from django.conf import settings
+from .models import Team, Player, Payment
+from .razorpay_client import client
+
+class CreateOrder(APIView):
+
+    def post(self, request):
+
+        team_type = request.data.get("team_type")
+
+        if team_type not in ["solo", "duo"]:
+            return Response({"error": "Invalid team type"}, status=400)
+
+        amount = settings.SOLO_FEE if team_type == "solo" else settings.DUO_FEE
+
+        try:
+            order = client.order.create({
+                "amount": amount * 100,
+                "currency": "INR",
+                "payment_capture": 1
+            })
+
+            Payment.objects.create(
+                razorpay_order_id=order["id"],
+                amount=amount,
+                team_type=team_type
+            )
+
+            return Response({
+                "order_id": order["id"],
+                "amount": amount,
+                "key": settings.RAZORPAY_KEY_ID
+            })
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+
+
+
+class VerifyPayment(APIView):
+
+    def post(self, request):
+
+        order_id = request.data.get("razorpay_order_id")
+        payment_id = request.data.get("razorpay_payment_id")
+        signature = request.data.get("razorpay_signature")
+        team_data = request.data.get("team_data")
+
+        if not all([order_id, payment_id, signature, team_data]):
+            return Response({"error": "Missing fields"}, status=400)
+
+        try:
+            payment = Payment.objects.get(razorpay_order_id=order_id)
+
+            if payment.verified:
+                return Response({"error": "Payment already verified"}, status=400)
+
+            client.utility.verify_payment_signature({
+                "razorpay_order_id": order_id,
+                "razorpay_payment_id": payment_id,
+                "razorpay_signature": signature
+            })
+
+        except Payment.DoesNotExist:
+            return Response({"error": "Order not found"}, status=404)
+
+        except Exception:
+            return Response({"error": "Signature verification failed"}, status=400)
+
+        try:
+            with transaction.atomic():
+
+                serializer = TeamSerializer(data=team_data)
+                serializer.is_valid(raise_exception=True)
+                team = serializer.save()
+
+                payment.razorpay_payment_id = payment_id
+                payment.razorpay_signature = signature
+                payment.verified = True
+                payment.save()
+
+                send_registration_mail(team, team_data["password"])
+
+        except IntegrityError:
+            return Response({
+                "error": "Duplicate entry: team/student already exists"
+            }, status=400)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=400)
+
+        return Response({
+            "success": True,
+            "team_id": team.team_id,
+            "message": "Payment verified & registration successful"
+        })
+
+
 
 class RegisterTeam(APIView):
 
