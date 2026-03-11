@@ -57,7 +57,9 @@ class VerifyPayment(APIView):
 
         if not all([order_id, payment_id, signature, team_data]):
             return Response({"error": "Missing fields"}, status=400)
-
+        
+        if not isinstance(team_data, dict):
+            return Response({"error": "Invalid team data"}, status=400)
         try:
             payment = Payment.objects.get(razorpay_order_id=order_id)
 
@@ -78,6 +80,23 @@ class VerifyPayment(APIView):
 
         try:
             with transaction.atomic():
+                
+                frontend_team_type = team_data.get("team_type")
+
+                if frontend_team_type != payment.team_type:
+                    return Response(
+                        {"error": "Team type mismatch with payment"},
+                        status=400
+                    )
+
+                #  Amount validation
+                expected_amount = settings.SOLO_FEE if payment.team_type == "solo" else settings.DUO_FEE
+
+                if payment.amount != expected_amount:
+                    return Response(
+                        {"error": "Payment amount mismatch"},
+                        status=400
+                    )
 
                 serializer = TeamSerializer(data=team_data)
                 serializer.is_valid(raise_exception=True)
@@ -86,6 +105,7 @@ class VerifyPayment(APIView):
                 payment.razorpay_payment_id = payment_id
                 payment.razorpay_signature = signature
                 payment.verified = True
+                payment.team = team
                 payment.save()
 
                 send_registration_mail(team, team_data["password"])

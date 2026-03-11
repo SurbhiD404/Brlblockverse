@@ -36,7 +36,7 @@ class Player(models.Model):
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="players")
 
     name = models.CharField(max_length=40)
-    phone = models.CharField(max_length=10)
+    phone = models.CharField(max_length=15)
     student_no = models.CharField(max_length=20, unique=True,db_index=True)
     roll_no = models.CharField(max_length=20, unique=True)
     email = models.EmailField(unique=True)
@@ -50,6 +50,14 @@ class Player(models.Model):
         return self.name
 
 class Payment(models.Model):
+    team = models.ForeignKey(
+        Team,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="payments"
+    )
+
     razorpay_order_id = models.CharField(max_length=100, unique=True)
     razorpay_payment_id = models.CharField(max_length=100, null=True, blank=True)
     razorpay_signature = models.CharField(max_length=255, null=True, blank=True)
